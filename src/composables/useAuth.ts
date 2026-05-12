@@ -10,10 +10,11 @@ export function useAuth() {
 
   const isAuthenticated = computed(() => !!authStore.token)
   const username = computed(() => authStore.username)
+  const nombre = computed(() => authStore.nombre)
 
   async function login(data: LoginRequest) {
     const response = await authService.login(data)
-    authStore.setAuth(response.token, response.username)
+    authStore.setAuth(response.token, response.username, response.nombre)
     router.push('/pos')
   }
 
@@ -22,5 +23,5 @@ export function useAuth() {
     router.push('/login')
   }
 
-  return { login, logout, isAuthenticated, username }
+  return { login, logout, isAuthenticated, username, nombre }
 }

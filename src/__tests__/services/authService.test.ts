@@ -35,7 +35,7 @@ describe('authService', () => {
 
   it('login retorna token cuando el backend responde 200', async () => {
     const mockResponse = {
-      data: { token: 'abc123', username: 'admin', expiresIn: 3600 },
+      data: { token: 'abc123', username: 'admin', nombre: 'Administrador' },
     }
     mockPost.mockResolvedValue(mockResponse)
 

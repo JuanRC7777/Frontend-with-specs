@@ -25,6 +25,16 @@ const router = createRouter({
           component: () => import('../views/PosView.vue'),
         },
         {
+          path: 'ventas',
+          name: 'ventas',
+          component: () => import('../views/VentasView.vue'),
+        },
+        {
+          path: 'configuracion',
+          name: 'configuracion',
+          component: () => import('../views/ConfiguracionView.vue'),
+        },
+        {
           path: '',
           redirect: '/pos',
         },
@@ -33,15 +43,14 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.token) {
-    next({ path: '/login' })
-  } else if (to.path === '/login' && authStore.token) {
-    next({ path: '/pos' })
-  } else {
-    next()
+    return { path: '/login' }
+  }
+  if (to.path === '/login' && authStore.token) {
+    return { path: '/pos' }
   }
 })
 

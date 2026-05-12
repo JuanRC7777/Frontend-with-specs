@@ -3,9 +3,11 @@
     <div class="flex gap-4">
       <router-link to="/pos" class="hover:text-gray-300">POS</router-link>
       <router-link to="/productos" class="hover:text-gray-300">Productos</router-link>
+      <router-link to="/ventas" class="hover:text-gray-300">Ventas</router-link>
+      <router-link to="/configuracion" class="hover:text-gray-300">Configuración</router-link>
     </div>
     <div class="flex items-center gap-4">
-      <span>{{ username }}</span>
+      <span class="text-sm text-gray-300">{{ nombre }}</span>
       <button
         @click="handleLogout"
         class="bg-red-600 px-3 py-1 rounded hover:bg-red-700 text-sm"
@@ -19,7 +21,7 @@
 <script setup lang="ts">
 import { useAuth } from '../../composables/useAuth'
 
-const { username, logout } = useAuth()
+const { nombre, logout } = useAuth()
 
 function handleLogout() {
   logout()

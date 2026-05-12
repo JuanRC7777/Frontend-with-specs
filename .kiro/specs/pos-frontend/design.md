@@ -1,8 +1,8 @@
 # Design — Sistema POS Frontend
 
-**Versión:** 1.0.0
-**Fecha:** 2026-04-28
-**Referencia backend:** `../diseno.md` v2.0.0
+**Versión:** 2.0.0
+**Fecha:** 2026-05-10
+**Referencia API:** `guia.md` — Sistema POS API (base URL `http://localhost:8081`)
 
 ---
 
@@ -11,37 +11,39 @@
 El frontend aplica una separación de responsabilidades en capas: los componentes de UI no conocen la API, los servicios no conocen el estado global, y la lógica de negocio vive en composables y utilidades puras.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        VISTAS (Views)                        │
-│         LoginView  │  ProductosView  │  PosView             │
-└──────────────┬───────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                          VISTAS (Views)                              │
+│   LoginView │ ProductosView │ PosView │ VentasView │ ConfigView      │
+└──────────────┬───────────────────────────────────────────────────────┘
                │ usan
-┌──────────────▼───────────────────────────────────────────────┐
-│                     COMPONENTES UI                           │
-│   LoginForm │ ProductoForm │ ProductoTable │ CarritoVenta    │
-└──────────────┬───────────────────────────────────────────────┘
+┌──────────────▼───────────────────────────────────────────────────────┐
+│                       COMPONENTES UI                                 │
+│  LoginForm │ ProductoForm │ ProductoTable │ CarritoVenta             │
+│  PagoForm  │ VentaDetalle │ ReembolsoForm │ VentaFiltros             │
+└──────────────┬───────────────────────────────────────────────────────┘
                │ usan
-┌──────────────▼───────────────────────────────────────────────┐
-│              COMPOSABLES (Lógica de negocio)                 │
-│   useAuth │ useProductos │ useCarrito │ useVentas            │
-└──────────────┬───────────────────────────────────────────────┘
+┌──────────────▼───────────────────────────────────────────────────────┐
+│              COMPOSABLES (Lógica de negocio)                         │
+│  useAuth │ useProductos │ useCarrito │ useVentas │ useConfiguracion  │
+└──────────────┬───────────────────────────────────────────────────────┘
                │ usan
-┌──────────────▼───────────────────────────────────────────────┐
-│                  SERVICIOS HTTP (API Layer)                  │
-│   authService │ productoService │ ventaService              │
-└──────────────┬───────────────────────────────────────────────┘
+┌──────────────▼───────────────────────────────────────────────────────┐
+│                  SERVICIOS HTTP (API Layer)                          │
+│  authService │ productoService │ ventaService │ configuracionService │
+└──────────────┬───────────────────────────────────────────────────────┘
                │ usan
-┌──────────────▼───────────────────────────────────────────────┐
-│                  API CLIENT (Interceptor JWT)                │
-│                       apiClient.ts                           │
-└──────────────┬───────────────────────────────────────────────┘
+┌──────────────▼───────────────────────────────────────────────────────┐
+│                  API CLIENT (Interceptor JWT)                        │
+│                         apiClient.ts                                 │
+└──────────────┬───────────────────────────────────────────────────────┘
                │ HTTP/JSON
-┌──────────────▼───────────────────────────────────────────────┐
-│              BACKEND API REST (Spring Boot)                  │
-│         POST /api/auth/login                                 │
-│         GET|POST|PUT|DELETE /api/productos                   │
-│         POST|GET /api/ventas                                 │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────▼───────────────────────────────────────────────────────┐
+│              BACKEND API REST (Spring Boot)                          │
+│  POST /api/auth/login                                                │
+│  GET|POST|PUT|DELETE /api/productos                                  │
+│  POST|GET /api/ventas  │  POST /api/ventas/{id}/reembolso            │
+│  GET|PUT /api/configuracion/tasa-impuesto                            │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -64,13 +66,14 @@ El frontend aplica una separación de responsabilidades en capas: los componente
 ### ISP — Interface Segregation
 
 - Cada composable expone solo lo que el componente necesita.
-- `useCarrito` expone `{ items, agregar, eliminar, vaciar, total, confirmar }`.
+- `useCarrito` expone `{ items, agregar, eliminar, vaciar, subtotal, impuesto, total, tasaImpuesto, confirmar }`.
 - `useProductos` expone `{ productos, crear, actualizar, eliminar, loading, error }`.
+- `useVentas` expone `{ ventas, cargar, filtros, pagina, totalPaginas, loading, error }`.
 
 ### Separación de estado
 
-- Estado global (token, usuario): `authStore` (Pinia).
-- Estado de dominio (productos, carrito): composables locales con `ref`/`reactive`.
+- Estado global (token, usuario, nombre): `authStore` (Pinia).
+- Estado de dominio (productos, carrito, ventas): composables locales con `ref`/`reactive`.
 - Estado de UI (loading, errores): dentro de cada composable.
 
 ---
@@ -99,15 +102,17 @@ El frontend aplica una separación de responsabilidades en capas: los componente
 ```
 pos-frontend/
 ├── src/
-│   ├── main.ts                         ← Entry point
-│   ├── App.vue                         ← Router principal
+│   ├── main.ts
+│   ├── App.vue
 │   │
-│   ├── views/                          ← Vistas/páginas
+│   ├── views/
 │   │   ├── LoginView.vue
 │   │   ├── ProductosView.vue
-│   │   └── PosView.vue
+│   │   ├── PosView.vue
+│   │   ├── VentasView.vue
+│   │   └── ConfiguracionView.vue
 │   │
-│   ├── components/                     ← Componentes UI reutilizables
+│   ├── components/
 │   │   ├── auth/
 │   │   │   └── LoginForm.vue
 │   │   ├── productos/
@@ -118,57 +123,71 @@ pos-frontend/
 │   │   │   ├── CarritoVenta.vue
 │   │   │   ├── CarritoItem.vue
 │   │   │   ├── ProductoSelector.vue
+│   │   │   ├── PagoForm.vue           ← NUEVO: datos cliente + métodos de pago
 │   │   │   └── ResumenVenta.vue
+│   │   ├── ventas/
+│   │   │   ├── VentaTable.vue         ← NUEVO: lista paginada de ventas
+│   │   │   ├── VentaDetalle.vue       ← NUEVO: detalle completo de una venta
+│   │   │   ├── VentaFiltros.vue       ← NUEVO: filtros por fecha/cédula/método
+│   │   │   └── ReembolsoForm.vue      ← NUEVO: formulario de reembolso
 │   │   └── shared/
 │   │       ├── Navbar.vue
 │   │       ├── LoadingSpinner.vue
 │   │       └── ErrorAlert.vue
 │   │
-│   ├── composables/                    ← Lógica de negocio (Composition API)
+│   ├── composables/
 │   │   ├── useAuth.ts
 │   │   ├── useProductos.ts
-│   │   ├── useCarrito.ts
-│   │   └── useVentas.ts
+│   │   ├── useCarrito.ts              ← actualizado: impuesto, cliente, pagos
+│   │   ├── useVentas.ts               ← actualizado: filtros, paginación, reembolso
+│   │   └── useConfiguracion.ts        ← NUEVO: tasa de impuesto
 │   │
-│   ├── services/                       ← Capa HTTP (API calls)
-│   │   ├── apiClient.ts               ← Axios instance + interceptores JWT
+│   ├── services/
+│   │   ├── apiClient.ts
 │   │   ├── authService.ts
 │   │   ├── productoService.ts
-│   │   └── ventaService.ts
+│   │   ├── ventaService.ts            ← actualizado: filtros, reembolso
+│   │   └── configuracionService.ts    ← NUEVO
 │   │
-│   ├── stores/                         ← Estado global (Pinia)
-│   │   └── authStore.ts               ← token, username, setAuth, logout
+│   ├── stores/
+│   │   └── authStore.ts               ← actualizado: campo `nombre`
 │   │
-│   ├── types/                          ← Tipos TypeScript (DTOs)
-│   │   ├── auth.types.ts
+│   ├── types/
+│   │   ├── auth.types.ts              ← actualizado: LoginResponse con `nombre`
 │   │   ├── producto.types.ts
-│   │   └── venta.types.ts
+│   │   └── venta.types.ts             ← actualizado: tipos completos de la API
 │   │
-│   ├── router/                         ← Configuración de rutas
-│   │   └── index.ts
+│   ├── router/
+│   │   └── index.ts                   ← actualizado: rutas /ventas y /configuracion
 │   │
-│   └── utils/                          ← Funciones puras
-│       ├── calcularTotal.ts
-│       └── formatCurrency.ts
+│   └── utils/
+│       ├── calcularTotal.ts           ← actualizado: incluye impuesto
+│       ├── formatCurrency.ts
+│       └── validaciones.ts            ← NUEVO: validarCedula, validarNombreCliente
 │
 ├── src/__tests__/
 │   ├── utils/
 │   │   ├── calcularTotal.test.ts
-│   │   └── formatCurrency.test.ts
+│   │   ├── formatCurrency.test.ts
+│   │   └── validaciones.test.ts       ← NUEVO
 │   ├── composables/
 │   │   ├── useCarrito.test.ts
 │   │   ├── useProductos.test.ts
-│   │   └── useAuth.test.ts
+│   │   ├── useAuth.test.ts
+│   │   ├── useVentas.test.ts
+│   │   └── useConfiguracion.test.ts   ← NUEVO
 │   ├── stores/
 │   │   └── authStore.test.ts
 │   ├── services/
 │   │   ├── authService.test.ts
 │   │   ├── productoService.test.ts
-│   │   └── ventaService.test.ts
+│   │   ├── ventaService.test.ts
+│   │   └── configuracionService.test.ts ← NUEVO
 │   └── components/
 │       ├── LoginForm.test.ts
 │       ├── ProductoForm.test.ts
-│       └── CarritoVenta.test.ts
+│       ├── CarritoVenta.test.ts
+│       └── PagoForm.test.ts           ← NUEVO
 │
 ├── index.html
 ├── vite.config.ts
@@ -181,7 +200,7 @@ pos-frontend/
 
 ## 5. Tipos TypeScript (DTOs)
 
-Alineados con los responses del backend:
+Alineados exactamente con los contratos de la API:
 
 ```typescript
 // types/auth.types.ts
@@ -193,14 +212,14 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string;
   username: string;
-  expiresIn: number;
+  nombre: string;           // nombre display del usuario (ej. "Administrador")
 }
 
 // types/producto.types.ts
 export interface Producto {
   id: number;
   nombre: string;
-  descripcion: string;
+  descripcion: string | null;
   precio: number;
   stock: number;
   activo: boolean;
@@ -208,34 +227,82 @@ export interface Producto {
 
 export interface CrearProductoRequest {
   nombre: string;
-  descripcion: string;
+  descripcion?: string;
   precio: number;
   stock: number;
 }
 
 // types/venta.types.ts
-export interface ItemVenta {
+export type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
+
+export interface ItemVentaRequest {
   productoId: number;
   cantidad: number;
 }
 
-export interface RegistrarVentaRequest {
-  items: ItemVenta[];
+export interface PagoRequest {
+  metodoPago: MetodoPago;
+  monto: number;
 }
 
-export interface VentaResponse {
-  id: number;
-  total: number;
-  fecha: string;
-  detalles: DetalleVentaResponse[];
+export interface RegistrarVentaRequest {
+  nombreCliente: string;      // mínimo 2 palabras, 3–50 chars, solo letras/espacios/tildes/ñ
+  cedulaCliente: string;      // exactamente 10 dígitos numéricos
+  items: ItemVentaRequest[];
+  pagos: PagoRequest[];
 }
 
 export interface DetalleVentaResponse {
   productoId: number;
   nombreProducto: string;
   cantidad: number;
-  precioUnitario: number;
+  precioUnit: number;
   subtotal: number;
+}
+
+export interface PagoResponse {
+  id: number;
+  metodoPago: string;
+  monto: number;
+}
+
+export interface ReembolsoResponse {
+  id: number;
+  ventaId: number;
+  motivo: string;
+  fecha: string;              // ISO-8601 datetime
+  usuarioId: number;
+  nombreUsuario: string;
+}
+
+export interface VentaResponse {
+  id: number;
+  numeroFactura: string;      // formato FAC-YYYYMMDD-NNNNNN
+  usuarioId: number;
+  nombreCajero: string;
+  nombreCliente: string;
+  cedulaCliente: string;
+  detalles: DetalleVentaResponse[];
+  pagos: PagoResponse[];
+  subtotal: number;
+  tasaImpuesto: number;
+  impuesto: number;
+  total: number;
+  fecha: string;              // ISO-8601 datetime
+  reembolsada: boolean;
+  reembolso: ReembolsoResponse | null;
+}
+
+export interface ReembolsoRequest {
+  motivo: string;             // 10–500 caracteres
+}
+
+export interface FiltrosVenta {
+  fecha?: string;             // YYYY-MM-DD
+  cedulaCliente?: string;
+  metodoPago?: MetodoPago;
+  page?: number;              // base 0
+  size?: number;              // default 20
 }
 
 // Carrito (estado local, no viene del backend)
@@ -243,6 +310,28 @@ export interface ItemCarrito {
   producto: Producto;
   cantidad: number;
   subtotal: number;
+}
+
+// types/configuracion.types.ts
+export interface ConfiguracionResponse {
+  clave: string;
+  valor: string;
+  valorDecimal: number;
+}
+
+export interface ActualizarTasaRequest {
+  tasaImpuesto: number;       // entre 0.0 y 1.0
+}
+
+// Errores
+export interface ErrorResponse {
+  success: false;
+  message: string;
+  timestamp: string;
+}
+
+export interface ValidationErrorResponse extends ErrorResponse {
+  errors: Record<string, string>;
 }
 ```
 
@@ -257,6 +346,7 @@ import { useAuthStore } from '../stores/authStore';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 // Inyecta el token en cada request
@@ -286,7 +376,34 @@ export default apiClient;
 
 ---
 
-## 7. Composables Principales
+## 7. Servicios HTTP
+
+### ventaService
+
+```typescript
+// services/ventaService.ts
+export const ventaService = {
+  registrar(data: RegistrarVentaRequest): Promise<VentaResponse>,
+  listar(filtros?: FiltrosVenta): Promise<VentaResponse[]>,
+  obtener(id: number): Promise<VentaResponse>,
+  obtenerPorFactura(numeroFactura: string): Promise<VentaResponse>,
+  reembolsar(id: number, data: ReembolsoRequest): Promise<ReembolsoResponse>,
+};
+```
+
+### configuracionService
+
+```typescript
+// services/configuracionService.ts
+export const configuracionService = {
+  obtenerTasaImpuesto(): Promise<ConfiguracionResponse>,
+  actualizarTasaImpuesto(data: ActualizarTasaRequest): Promise<ConfiguracionResponse>,
+};
+```
+
+---
+
+## 8. Composables Principales
 
 ### useCarrito
 
@@ -294,42 +411,152 @@ export default apiClient;
 // composables/useCarrito.ts
 export function useCarrito() {
   const items = ref<ItemCarrito[]>([]);
+  const tasaImpuesto = ref<number>(0);
+  const datosCliente = reactive({ nombreCliente: '', cedulaCliente: '' });
+  const pagos = ref<PagoRequest[]>([]);
 
-  const agregar = (producto: Producto, cantidad: number) => { /* ... */ };
+  const subtotal = computed(() => calcularSubtotalGeneral(items.value));
+  const impuesto = computed(() => calcularImpuesto(subtotal.value, tasaImpuesto.value));
+  const total    = computed(() => calcularTotal(subtotal.value, tasaImpuesto.value));
+
+  const agregar  = (producto: Producto, cantidad: number) => { /* ... */ };
   const eliminar = (productoId: number) => { /* ... */ };
-  const vaciar = () => { items.value = []; };
-  const total = computed(() => calcularTotal(items.value)); // función pura
+  const vaciar   = () => { items.value = []; pagos.value = []; };
+
   const confirmar = async () => {
     if (items.value.length === 0) throw new Error('El carrito está vacío');
-    await ventaService.registrar({ items: items.value.map(/* ... */) });
+    validarDatosCliente(datosCliente);   // lanza si nombre/cédula inválidos
+    validarSumaPagos(pagos.value, total.value); // lanza si suma != total
+    const resultado = await ventaService.registrar({
+      nombreCliente: datosCliente.nombreCliente,
+      cedulaCliente: datosCliente.cedulaCliente,
+      items: items.value.map(i => ({ productoId: i.producto.id, cantidad: i.cantidad })),
+      pagos: pagos.value,
+    });
     vaciar();
+    return resultado;
   };
 
-  return { items, agregar, eliminar, vaciar, total, confirmar };
+  return { items, tasaImpuesto, datosCliente, pagos, subtotal, impuesto, total, agregar, eliminar, vaciar, confirmar };
 }
 ```
 
-### useProductos
+### useVentas
 
 ```typescript
-// composables/useProductos.ts
-export function useProductos() {
-  const productos = ref<Producto[]>([]);
+// composables/useVentas.ts
+export function useVentas() {
+  const ventas  = ref<VentaResponse[]>([]);
   const loading = ref(false);
-  const error = ref<string | null>(null);
+  const error   = ref<string | null>(null);
+  const filtros = reactive<FiltrosVenta>({ page: 0, size: 20 });
 
-  const cargar = async () => { /* GET /api/productos */ };
-  const crear = async (data: CrearProductoRequest) => { /* ... */ };
-  const actualizar = async (id: number, data: CrearProductoRequest) => { /* ... */ };
-  const eliminar = async (id: number) => { /* ... */ };
+  const cargar   = async () => { /* GET /api/ventas con filtros */ };
+  const reembolsar = async (id: number, motivo: string) => {
+    /* POST /api/ventas/{id}/reembolso */
+  };
 
-  return { productos, loading, error, cargar, crear, actualizar, eliminar };
+  return { ventas, loading, error, filtros, cargar, reembolsar };
+}
+```
+
+### useConfiguracion
+
+```typescript
+// composables/useConfiguracion.ts
+export function useConfiguracion() {
+  const tasaImpuesto = ref<number>(0);
+  const loading = ref(false);
+
+  const cargarTasa = async () => {
+    const config = await configuracionService.obtenerTasaImpuesto();
+    tasaImpuesto.value = config.valorDecimal;
+  };
+
+  const actualizarTasa = async (nuevaTasa: number) => {
+    await configuracionService.actualizarTasaImpuesto({ tasaImpuesto: nuevaTasa });
+    tasaImpuesto.value = nuevaTasa;
+  };
+
+  return { tasaImpuesto, loading, cargarTasa, actualizarTasa };
 }
 ```
 
 ---
 
-## 8. Rutas y Navegación
+## 9. Utilidades Puras
+
+```typescript
+// utils/calcularTotal.ts
+export function calcularSubtotal(precio: number, cantidad: number): number {
+  return precio * cantidad;
+}
+
+export function calcularSubtotalGeneral(items: ItemCarrito[]): number {
+  return items.reduce((acc, i) => acc + i.subtotal, 0);
+}
+
+export function calcularImpuesto(subtotal: number, tasa: number): number {
+  return subtotal * tasa;
+}
+
+export function calcularTotal(subtotal: number, tasa: number): number {
+  return subtotal + subtotal * tasa;
+}
+
+// utils/validaciones.ts
+export function validarCedula(cedula: string): boolean {
+  return /^\d{10}$/.test(cedula);
+}
+
+export function validarNombreCliente(nombre: string): boolean {
+  if (nombre.length < 3 || nombre.length > 50) return false;
+  if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(nombre)) return false;
+  return nombre.trim().split(/\s+/).length >= 2;
+}
+
+export function validarSumaPagos(pagos: PagoRequest[], total: number): boolean {
+  const suma = pagos.reduce((acc, p) => acc + p.monto, 0);
+  return Math.abs(suma - total) < 0.001; // tolerancia de punto flotante
+}
+```
+
+---
+
+## 10. Store Global — Autenticación (Pinia)
+
+```typescript
+// stores/authStore.ts
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    token:    localStorage.getItem('token'),
+    username: localStorage.getItem('username'),
+    nombre:   localStorage.getItem('nombre'),   // ← campo nuevo
+  }),
+  actions: {
+    setAuth(token: string, username: string, nombre: string) {
+      this.token    = token;
+      this.username = username;
+      this.nombre   = nombre;
+      localStorage.setItem('token',    token);
+      localStorage.setItem('username', username);
+      localStorage.setItem('nombre',   nombre);
+    },
+    logout() {
+      this.token    = null;
+      this.username = null;
+      this.nombre   = null;
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('nombre');
+    },
+  },
+});
+```
+
+---
+
+## 11. Rutas y Navegación
 
 ```typescript
 // router/index.ts
@@ -340,25 +567,98 @@ const routes = [
     component: AppLayout,
     meta: { requiresAuth: true },
     children: [
-      { path: 'productos', component: ProductosView },
-      { path: 'pos', component: PosView },
-      { path: '', redirect: '/pos' },
+      { path: 'productos',      component: ProductosView },
+      { path: 'pos',            component: PosView },
+      { path: 'ventas',         component: VentasView },
+      { path: 'configuracion',  component: ConfiguracionView },
+      { path: '',               redirect: '/pos' },
     ],
   },
 ];
 
-// Navigation guard
 router.beforeEach((to) => {
   const authStore = useAuthStore();
-  if (to.meta.requiresAuth && !authStore.token) {
-    return { path: '/login' };
-  }
+  if (to.meta.requiresAuth && !authStore.token) return { path: '/login' };
+  if (to.path === '/login' && authStore.token)  return { path: '/pos' };
 });
 ```
 
 ---
 
-## 9. Estrategia de Tests
+## 12. Flujos del Sistema
+
+### 12.1 Flujo de Login
+
+```
+LoginView → LoginForm → useAuth.login()
+                            │
+                    authService.login(credentials)
+                            │
+                    POST /api/auth/login
+                            │
+                    ◄── { token, username, nombre }
+                            │
+                    authStore.setAuth(token, username, nombre)
+                            │
+                    router.push('/pos')
+```
+
+### 12.2 Flujo de Venta POS
+
+```
+PosView (onMounted)
+  │
+  ├── GET /api/configuracion/tasa-impuesto  → tasaImpuesto
+  └── GET /api/productos                   → catálogo
+
+ProductoSelector → useCarrito.agregar(producto, cantidad)
+                              │
+                    calcularSubtotalGeneral(items)
+                    calcularImpuesto(subtotal, tasa)
+                    calcularTotal(subtotal, tasa)
+                              │
+                    CarritoVenta muestra items + subtotal + impuesto + total
+
+PagoForm → datosCliente (nombreCliente, cedulaCliente)
+         → pagos[] (metodoPago, monto)
+         → validarCedula / validarNombreCliente / validarSumaPagos
+
+[Confirmar Venta]
+  │
+  useCarrito.confirmar()
+  │
+  ventaService.registrar({ nombreCliente, cedulaCliente, items, pagos })
+  │
+  POST /api/ventas  (JWT en header)
+  │
+  ◄── VentaResponse (201) con numeroFactura
+  │
+  useCarrito.vaciar()
+  ResumenVenta muestra numeroFactura
+```
+
+### 12.3 Flujo de Reembolso
+
+```
+VentasView → VentaDetalle (venta.reembolsada === false)
+                │
+                [Reembolsar]
+                │
+            ReembolsoForm → motivo (10–500 chars)
+                │
+            useVentas.reembolsar(id, motivo)
+                │
+            POST /api/ventas/{id}/reembolso
+                │
+            ◄── ReembolsoResponse (200)
+                │
+            venta.reembolsada = true
+            mostrar datos del reembolso
+```
+
+---
+
+## 13. Estrategia de Tests
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -369,6 +669,7 @@ router.beforeEach((to) => {
 ├──────────────────────────────────────────────────────────┤
 │  Tests de Propiedades (PBT)                              │
 │  - utils/: fast-check para invariantes matemáticos       │
+│  - utils/validaciones: fast-check para reglas de negocio │
 │  - composables/: fast-check para invariantes del carrito │
 ├──────────────────────────────────────────────────────────┤
 │  Tests de Componentes (DOM virtual)                      │
@@ -377,103 +678,73 @@ router.beforeEach((to) => {
 └──────────────────────────────────────────────────────────┘
 ```
 
-### Ejemplo: Test de utilidad pura con PBT
+### Ejemplo: Test de validaciones con PBT
 
 ```typescript
-// __tests__/utils/calcularTotal.test.ts
-import { calcularTotal } from '../../utils/calcularTotal';
+// __tests__/utils/validaciones.test.ts
+import { validarCedula, validarNombreCliente, validarSumaPagos } from '../../utils/validaciones';
 import fc from 'fast-check';
 
-describe('calcularTotal', () => {
-  it('retorna 0 con carrito vacío', () => {
-    expect(calcularTotal([])).toBe(0);
-  });
-
-  it('suma subtotales correctamente', () => {
-    const items = [{ subtotal: 30 }, { subtotal: 20 }];
-    expect(calcularTotal(items)).toBe(50);
-  });
-
-  it('PBT: siempre equivale a reduce de subtotales', () => {
+describe('validarCedula', () => {
+  it('PBT: acepta exactamente 10 dígitos', () => {
     fc.assert(
-      fc.property(
-        fc.array(fc.record({ subtotal: fc.float({ min: 0, max: 1000 }) })),
-        (items) => {
-          const expected = items.reduce((acc, i) => acc + i.subtotal, 0);
-          expect(calcularTotal(items)).toBeCloseTo(expected);
-        }
-      )
+      fc.property(fc.stringOf(fc.constantFrom('0','1','2','3','4','5','6','7','8','9'), { minLength: 10, maxLength: 10 }), (cedula) => {
+        expect(validarCedula(cedula)).toBe(true);
+      })
+    );
+  });
+
+  it('PBT: rechaza strings con longitud != 10', () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1, maxLength: 20 }).filter(s => s.length !== 10), (cedula) => {
+        expect(validarCedula(cedula)).toBe(false);
+      })
+    );
+  });
+});
+
+describe('validarSumaPagos', () => {
+  it('PBT: retorna true cuando la suma es exactamente el total', () => {
+    fc.assert(
+      fc.property(fc.float({ min: 1, max: 10000 }), (total) => {
+        const pagos = [{ metodoPago: 'EFECTIVO' as const, monto: total }];
+        expect(validarSumaPagos(pagos, total)).toBe(true);
+      })
     );
   });
 });
 ```
 
-### Ejemplo: Test de composable
+### Ejemplo: Test de useCarrito con impuesto
 
 ```typescript
 // __tests__/composables/useCarrito.test.ts
 import { useCarrito } from '../../composables/useCarrito';
 
 vi.mock('../../services/ventaService');
+vi.mock('../../services/configuracionService');
 
 describe('useCarrito', () => {
-  it('calcula el total al agregar productos', () => {
-    const { agregar, total } = useCarrito();
-    const producto = { id: 1, nombre: 'Café', precio: 10, stock: 5 } as Producto;
+  it('calcula impuesto y total correctamente', () => {
+    const { agregar, subtotal, impuesto, total, tasaImpuesto } = useCarrito();
+    tasaImpuesto.value = 0.05;
+    const producto = { id: 1, nombre: 'Café', precio: 10000, stock: 5 } as Producto;
 
-    agregar(producto, 3);
+    agregar(producto, 2);
 
-    expect(total.value).toBe(30);
+    expect(subtotal.value).toBe(20000);
+    expect(impuesto.value).toBeCloseTo(1000);
+    expect(total.value).toBeCloseTo(21000);
   });
 
-  it('no confirma venta con carrito vacío', async () => {
-    const { confirmar } = useCarrito();
-    await expect(confirmar()).rejects.toThrow('El carrito está vacío');
+  it('PBT: total siempre es subtotal + subtotal * tasa', () => {
+    fc.assert(
+      fc.property(fc.float({ min: 0, max: 1 }), (tasa) => {
+        const { tasaImpuesto, subtotal, total } = useCarrito();
+        tasaImpuesto.value = tasa;
+        expect(total.value).toBeCloseTo(subtotal.value + subtotal.value * tasa);
+      })
+    );
   });
 });
-```
-
----
-
-## 10. Flujos del Sistema
-
-### 10.1 Flujo de Login
-
-```
-LoginView → LoginForm → useAuth.login()
-                            │
-                            ▼
-                    authService.login(credentials)
-                            │
-                            ▼
-                    POST /api/auth/login
-                            │
-                    ◄── { token, username }
-                            │
-                    authStore.setAuth(token, username)
-                            │
-                    router.push('/pos')
-```
-
-### 10.2 Flujo de Venta POS
-
-```
-PosView → ProductoSelector → useCarrito.agregar(producto, cantidad)
-                                        │
-                              calcularTotal(items)  ← utilidad pura (computed)
-                                        │
-                              CarritoVenta muestra items + total
-                                        │
-                              [Confirmar Venta]
-                                        │
-                              useCarrito.confirmar()
-                                        │
-                              ventaService.registrar(items)
-                                        │
-                              POST /api/ventas  (con JWT en header)
-                                        │
-                              ◄── VentaResponse (201)
-                                        │
-                              useCarrito.vaciar()
-                              mostrar confirmación
 ```

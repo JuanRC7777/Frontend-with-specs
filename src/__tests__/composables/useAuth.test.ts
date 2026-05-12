@@ -39,14 +39,14 @@ describe('useAuth', () => {
     ;(authService.login as any).mockResolvedValue({
       token: 'abc123',
       username: 'admin',
-      expiresIn: 3600,
+      nombre: 'Administrador',
     })
 
     const { login } = useAuth()
     await login({ username: 'admin', password: '123' })
 
     expect(authService.login).toHaveBeenCalledWith({ username: 'admin', password: '123' })
-    expect(mockSetAuth).toHaveBeenCalledWith('abc123', 'admin')
+    expect(mockSetAuth).toHaveBeenCalledWith('abc123', 'admin', 'Administrador')
     expect(mockPush).toHaveBeenCalledWith('/pos')
   })
 

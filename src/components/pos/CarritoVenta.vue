@@ -14,10 +14,10 @@
         @eliminar="$emit('eliminar', $event)"
       />
 
-      <div class="border-t pt-3 mt-3 text-right">
-        <p class="text-xl font-bold">
-          Total: {{ formatCurrency(total) }}
-        </p>
+      <div class="border-t pt-3 mt-3 space-y-1 text-right text-sm">
+        <p>Subtotal: <span class="font-medium">{{ formatCurrency(subtotal) }}</span></p>
+        <p>Impuesto ({{ (tasaImpuesto * 100).toFixed(0) }}%): <span class="font-medium">{{ formatCurrency(impuesto) }}</span></p>
+        <p class="text-xl font-bold">Total: {{ formatCurrency(total) }}</p>
       </div>
     </div>
 
@@ -41,7 +41,10 @@ import ErrorAlert from '../shared/ErrorAlert.vue'
 
 defineProps<{
   items: ItemCarrito[]
+  subtotal: number
+  impuesto: number
   total: number
+  tasaImpuesto: number
   loading?: boolean
   error: string | null
 }>()

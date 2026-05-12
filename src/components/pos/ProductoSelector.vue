@@ -26,7 +26,8 @@
           />
           <button
             @click="agregarAlCarrito(producto)"
-            class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
+            :disabled="!cantidades[producto.id] || cantidades[producto.id] < 1 || cantidades[producto.id] > producto.stock"
+            class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Agregar
           </button>
@@ -39,13 +40,11 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 import type { Producto } from '../../types/producto.types'
-import { useCarrito } from '../../composables/useCarrito'
 
-defineProps<{
+const props = defineProps<{
   productos: Producto[]
+  onAgregar: (producto: Producto, cantidad: number) => void
 }>()
-
-const { agregar } = useCarrito()
 
 const cantidades = reactive<Record<number, number>>({})
 
@@ -56,7 +55,7 @@ function agregarAlCarrito(producto: Producto) {
     alert('Stock insuficiente')
     return
   }
-  agregar(producto, cantidad)
+  props.onAgregar(producto, cantidad)
   cantidades[producto.id] = 1
 }
 </script>

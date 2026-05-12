@@ -23,7 +23,10 @@ describe('CarritoVenta', () => {
     const wrapper = mount(CarritoVenta, {
       props: {
         items: [],
+        subtotal: 0,
+        impuesto: 0,
         total: 0,
+        tasaImpuesto: 0.19,
         error: null,
       },
     })
@@ -31,7 +34,7 @@ describe('CarritoVenta', () => {
     expect(wrapper.text()).toContain('El carrito está vacío')
   })
 
-  it('muestra total actualizado al tener productos', () => {
+  it('muestra subtotal, impuesto y total por separado', () => {
     const items: ItemCarrito[] = [
       { producto: productoMock, cantidad: 2, subtotal: 20 },
     ]
@@ -39,19 +42,34 @@ describe('CarritoVenta', () => {
     const wrapper = mount(CarritoVenta, {
       props: {
         items,
-        total: 20,
+        subtotal: 20,
+        impuesto: 3.8,
+        total: 23.8,
+        tasaImpuesto: 0.19,
         error: null,
       },
     })
 
-    expect(wrapper.text()).toContain('$20')
+    const text = wrapper.text()
+    // Subtotal visible
+    expect(text).toContain('Subtotal')
+    expect(text).toContain('20')
+    // Impuesto visible con tasa
+    expect(text).toContain('Impuesto')
+    expect(text).toContain('19%')
+    // Total visible (mayor que subtotal)
+    expect(text).toContain('Total')
+    expect(text).toContain('24')
   })
 
   it('deshabilita botón "Confirmar" con carrito vacío', () => {
     const wrapper = mount(CarritoVenta, {
       props: {
         items: [],
+        subtotal: 0,
+        impuesto: 0,
         total: 0,
+        tasaImpuesto: 0.19,
         error: null,
       },
     })
@@ -64,7 +82,10 @@ describe('CarritoVenta', () => {
     const wrapper = mount(CarritoVenta, {
       props: {
         items: [],
+        subtotal: 0,
+        impuesto: 0,
         total: 0,
+        tasaImpuesto: 0.19,
         error: 'Stock insuficiente',
       },
     })
@@ -80,7 +101,10 @@ describe('CarritoVenta', () => {
   const wrapper = mount(CarritoVenta, {
     props: {
       items,
-      total: 10,
+      subtotal: 10,
+      impuesto: 1.9,
+      total: 11.9,
+      tasaImpuesto: 0.19,
       error: null,
     },
   })
